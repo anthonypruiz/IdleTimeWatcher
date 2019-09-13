@@ -42,6 +42,8 @@ namespace IdleTime
         {
             using (Process process = new Process())
             {
+                try{
+
                 process.StartInfo.FileName = @"C:\zabbix\zabbix_sender.exe";
                 process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
                 if(Settings1.Default.UpperCase == true)
@@ -54,6 +56,12 @@ namespace IdleTime
                     }
                 process.Start();
                 process.WaitForExit();
+                }catch(Exception ex){
+                                        using (StreamWriter w = File.AppendText(@"C:\zabbix\IdleTime.log"))
+                    {
+                        Log("Error Generated. Details: " + ex.ToString(), w);
+                    }
+                }
             }
         }
             try
