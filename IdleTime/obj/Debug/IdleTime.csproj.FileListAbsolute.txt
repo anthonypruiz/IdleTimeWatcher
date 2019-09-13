@@ -1,0 +1,7 @@
+C:\Users\Antho\source\repos\IdleTime\obj\Debug\IdleTime.csprojAssemblyReference.cache
+C:\Users\Antho\source\repos\IdleTime\obj\Debug\IdleTime.csproj.CoreCompileInputs.cache
+C:\Users\Antho\source\repos\IdleTime\bin\Debug\IdleTime.exe.config
+C:\Users\Antho\source\repos\IdleTime\bin\Debug\IdleTime.exe
+C:\Users\Antho\source\repos\IdleTime\bin\Debug\IdleTime.pdb
+C:\Users\Antho\source\repos\IdleTime\obj\Debug\IdleTime.exe
+C:\Users\Antho\source\repos\IdleTime\obj\Debug\IdleTime.pdb
