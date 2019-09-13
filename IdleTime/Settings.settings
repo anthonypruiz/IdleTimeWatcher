@@ -1,0 +1,21 @@
+﻿<?xml version='1.0' encoding='utf-8'?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)" GeneratedClassNamespace="IdleTime" GeneratedClassName="Settings">
+  <Profiles />
+  <Settings>
+    <Setting Name="UpperCase" Type="System.Boolean" Scope="Application">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="HideWindow" Type="System.Boolean" Scope="Application">
+      <Value Profile="(Default)">True</Value>
+    </Setting>
+    <Setting Name="ZabbixSenderLocation" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">C:\zabbix\zabbix_sender.exe</Value>
+    </Setting>
+    <Setting Name="ZabbixServerLocation" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">192.168.101.233</Value>
+    </Setting>
+    <Setting Name="ZabbixLogLocation" Type="System.String" Scope="Application">
+      <Value Profile="(Default)">C:\zabbix\IdleTime.log</Value>
+    </Setting>
+  </Settings>
+</SettingsFile>
