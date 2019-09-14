@@ -1,4 +1,4 @@
-# NetNanny - (If you see this text I'm currently setting up repository)
+# IdleTimeWatcher - (If you see this text I'm currently setting up repository)
 > This program gives the ability to monitor the network by Idletime with Zabbix and Graphana
 ## Features
 * Visual user activity monitoring (IdleTime) in real time when workstation is in use. 
