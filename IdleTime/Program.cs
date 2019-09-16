@@ -12,8 +12,6 @@ namespace IdleTime
 {
     class Program
     {
-        //public static string MachineName { get; private set; }
-
         //LOGGING METHOD FORMAT
         public static void Log(string logMessage, TextWriter w)
         {
@@ -36,7 +34,7 @@ namespace IdleTime
         static void Main(string[] args)
         {
             //IF YOU WANT TO SEE THE OUTPUT WINDOW SET THE HIDEWINDOW CONFIG TO FALSE
-            if(Settings.Default.HideWindow == true){
+            if(Settings.Default.HideWindow == false){
             IntPtr hWnd = FindWindow(null, Application.ExecutablePath);
             ShowWindow(hWnd, 0); // 0 = SW_HIDE
             FreeConsole();
@@ -45,28 +43,21 @@ namespace IdleTime
             Random random = new Random();
             return random.Next(min, max);
         }
-        string MachineNameLower = '"' + Environment.MachineName.ToLower() + '"';
-        string MachineNameUpper = '"' + Environment.MachineName + '"';
+        string MachineName = '"' + Environment.MachineName + '"';
 
-            void  SendIdleTime(string IdleSeconds)
+            void  SendToZabbix(string IdleSeconds)
         {
             using (Process process = new Process())
             {
                 try{
-                        //DEFAULT ZABBIX SENDER LOCATION IS C:\zabbix\zabbix_sender.exe
-                        process.StartInfo.FileName = Settings.Default.ZabbixSenderLocation;//SET THIS HERE OR AT THE SETTINGS FILE
-                        process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                if(Settings.Default.UpperCase == true)
-                    {
-                        process.StartInfo.Arguments = "-z " + Settings.Default.ZabbixServerLocation + " -p 10051 -s " + MachineNameUpper + " -k idletime -o " + IdleSeconds;
-                    }
-                    else
-                    {
-                        process.StartInfo.Arguments = "-z " + Settings.Default.ZabbixServerLocation + " -p 10051 -s " + MachineNameLower + " -k idletime -o " + IdleSeconds;
-                    }
-                process.Start();
-                process.WaitForExit();
-                }catch(Exception ex){
+                    //DEFAULT ZABBIX SENDER LOCATION IS C:\zabbix\zabbix_sender.exe
+                    process.StartInfo.FileName = Settings.Default.ZabbixSenderLocation;//SET THIS HERE OR AT THE SETTINGS FILE
+                    process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
+                    process.StartInfo.Arguments = "-z " + Settings.Default.ZabbixServerLocation + " -p 10051 -s " + MachineName + " -k idletime -o " + IdleSeconds;
+                    process.Start();
+                    process.WaitForExit();
+                }
+                    catch (Exception ex){
                         using (StreamWriter w = File.AppendText(Settings.Default.ZabbixLogLocation))
                     {
                         Log("Error Generated. Details: " + ex.ToString(), w);
@@ -81,10 +72,10 @@ namespace IdleTime
                 //
                 while (true)
                 {
-                    string IdleSeconds = Math.Ceiling(UserInput.IdleTime.TotalSeconds).ToString();
+                    string IdleSeconds = Math.Ceiling(LastInteraction.IdleTime.TotalSeconds).ToString();
                     //SET THE DELAY HERE IN MS DEFAULT IS BETWEEN 2 AND 10 SECONDS
                     int delay = RandomNumber(2000, 10000);
-                    //SendIdleTime(IdleSeconds);
+                    //SendToZabbix(IdleSeconds);
                     Console.WriteLine(IdleSeconds);
                     Thread.Sleep(delay);
                 }
@@ -93,60 +84,6 @@ namespace IdleTime
                 using (StreamWriter w = File.AppendText(Settings.Default.ZabbixLogLocation))
                 {
                     Log("Error Generated. Details: " + ex.ToString(), w);
-                }
-            }
-        }
-
-        //Below are the class definitions for the IdleTime
-        public static class UserInput
-        {
-
-            [DllImport("user32.dll", SetLastError = false)]
-            private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
-
-            [StructLayout(LayoutKind.Sequential)]
-
-
-            private struct LASTINPUTINFO
-            {
-                public uint cbSize;
-                public int dwTime;
-            }
-
-            public static DateTime LastInput
-            {
-                get
-                {
-                    DateTime bootTime = DateTime.UtcNow.AddMilliseconds(-Environment.TickCount);
-                    DateTime lastInput = bootTime.AddMilliseconds(LastInputTicks);
-                    return lastInput;
-                }
-            }
-
-            public static TimeSpan IdleTime
-            {
-                get
-                {
-                    return DateTime.UtcNow.Subtract(LastInput);
-                }
-            }
-
-            public static uint GetIdleTime()
-            {
-                LASTINPUTINFO lastInPut = new LASTINPUTINFO();
-                lastInPut.cbSize = (uint)Marshal.SizeOf(lastInPut);
-                GetLastInputInfo(ref lastInPut);
-
-                return (uint)Environment.TickCount - (uint)lastInPut.dwTime;
-            }
-            public static int LastInputTicks
-            {
-                get
-                {
-                    LASTINPUTINFO lii = new LASTINPUTINFO();
-                    lii.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
-                    GetLastInputInfo(ref lii);
-                    return lii.dwTime;
                 }
             }
         }
