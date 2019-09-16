@@ -23,5 +23,14 @@ Before installing the program on the host station you'll need these prerequisite
 1. Create a new item for the host group in your network in Zabbix, name it whatever but be sure the "key" name is identical to what's set in the program which by default is "idletime", set the units to "s" for seconds
 ---
 ![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/zabbixDone.png")
+
+2. copy all the contents of the /IdleTime/bin/Debug/ into a folder named "IdleTime" @ C:\IdleTime\
 > The program won't work if run as a service because windows service doesn't operate on the same dimension(IDK what it's called someone correct me), so in order for the program to work we need it to run as a scheduled task. (I will add onto this program in the future an automatic installer for the scheduled task but for now here's the manual steps)
-2. 
+3. 
+## **Create "Scheduled Task"**
+* Name it **"IdleTime"**
+* "When running the task, use the following user account:" **UserName**
+* **Run only when user is logged on.**
+ ## Triggers
+ * Begin the task **At lon on**
+ * Repeat task every **5 minutes**
