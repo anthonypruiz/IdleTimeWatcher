@@ -4,6 +4,8 @@
 * Visual user activity monitoring (IdleTime) in real time when workstation is in use. 
 * If there's no user activity, you'll see how long they've been away by a time counter in seconds.
 * Email Alerting when users log in and log out of their workstations.
+---
+![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/grafanaIdleTime3.png")
 ## Background
 This project originally was a solution to address attendence. Some employees did not clock-in or clock-out and the office management wanted to find a way to know when people signed into their computers and when they left for the day. Not only that they also wanted to get email alerts when these employees logged in and out of their PCs. The users all have Windows 7 transitioning to Windows 10 PCs, I had built a LAMP server already and had Zabbix with Graphana servers monitoring the network already. So after a few other methods that didn't work I ended up with a workable solution.
 <br>
