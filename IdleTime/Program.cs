@@ -31,6 +31,7 @@ namespace IdleTime
 
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
         static extern bool FreeConsole();
+
         static void Main(string[] args)
         {
             //IF YOU WANT TO SEE THE OUTPUT WINDOW SET THE HIDEWINDOW CONFIG TO FALSE
@@ -43,17 +44,25 @@ namespace IdleTime
             Random random = new Random();
             return random.Next(min, max);
         }
-        string MachineName = '"' + Environment.MachineName + '"';
+
+            string MachineName = '"' + Environment.MachineName + '"';
+            string ZabbixServerIp = Settings.Default.ZabbixServerLocation;//SET IP ADDRESS IN THE SETTINGS FILE
+            string ZabbixSenderExeLocation = Settings.Default.ZabbixSenderLocation;//SET LOCATION IN SETTINGS FILE DEFAULT LOCATION IS C:\zabbix\zabbix_sender.exe
 
             void  SendToZabbix(string IdleSeconds)
         {
             using (Process process = new Process())
             {
                 try{
-                    //DEFAULT ZABBIX SENDER LOCATION IS C:\zabbix\zabbix_sender.exe
-                    process.StartInfo.FileName = Settings.Default.ZabbixSenderLocation;//SET THIS HERE OR AT THE SETTINGS FILE
-                    process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                    process.StartInfo.Arguments = "-z " + Settings.Default.ZabbixServerLocation + " -p 10051 -s " + MachineName + " -k idletime -o " + IdleSeconds;
+                    //WHEN SENDING THE VALUE OF THE IDLETIME YOU NEED
+                    //1. ZABBIX SENDER LOCATION THAT CAN BE SET IN THE SETTINGS FILE
+                    //2. PORT NUMBER IS SET AT 10051
+                    //3. THE MACHINE'S HOSTNAME AS REGISTERED IN THE ZABBIX SERVER, CASE SENSITIVE
+                    //4. THE KEYNAME AS DEFINED IN ZABBIX FOR idletime, CASE SENSITIVE
+                    //5. THE VALUE OF IDLETIME WE GET FROM the LastInteraction.
+                    process.StartInfo.FileName = ZabbixSenderExeLocation;
+                    process.StartInfo.Arguments = "-z " + ZabbixServerIp + " -p 10051 -s " + MachineName + " -k idletime -o " + IdleSeconds;
+                    process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;   
                     process.Start();
                     process.WaitForExit();
                 }
@@ -73,9 +82,8 @@ namespace IdleTime
                 while (true)
                 {
                     string IdleSeconds = Math.Ceiling(LastInteraction.IdleTime.TotalSeconds).ToString();
-                    //SET THE DELAY HERE IN MS DEFAULT IS BETWEEN 2 AND 10 SECONDS
-                    int delay = RandomNumber(2000, 10000);
-                    //SendToZabbix(IdleSeconds);
+                    int delay = RandomNumber(2000, 10000);//SET THE DELAY HERE IN MS DEFAULT IS BETWEEN 2 AND 10 SECONDS
+                    SendToZabbix(IdleSeconds);
                     Console.WriteLine(IdleSeconds);
                     Thread.Sleep(delay);
                 }
