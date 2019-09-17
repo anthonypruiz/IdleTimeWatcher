@@ -1,5 +1,12 @@
-# IdleTimeWatcher - (If you see this text I'm currently setting up repository)
-> This program gives the ability to monitor the network by Idletime with Zabbix and Graphana
+# IdleTimeWatcher
+> This program gives the ability to monitor the network by Idletime with Zabbix and Graphana. Attendence and host inactivity email alerts.
+## Quick Navigation
+* [Background](https://github.com/anthonypruiz/IdleTimeWatcher#background)
+* [Requirements](https://github.com/anthonypruiz/IdleTimeWatcher#requirements)
+* [Installation](https://github.com/anthonypruiz/IdleTimeWatcher#installation-instructions)
+* [Scheduled Task](https://github.com/anthonypruiz/IdleTimeWatcher#create-scheduled-task)
+* [Email Alerts](https://github.com/anthonypruiz/IdleTimeWatcher#email-alerting-for-attendence-notifications)
+* [Grafana Dashboard Setup](https://github.com/anthonypruiz/IdleTimeWatcher#grafana-panel-setup)
 ## Features
 * Visual user activity monitoring (IdleTime) in real time when workstation is in use. 
 * If there's no user activity, you'll see how long they've been away by a time counter in seconds.
@@ -16,12 +23,12 @@ Pinvoking GetLastInput we're able to extract the value of the last time there wa
 ---
 ## Requirements
 Before installing the program on the host station you'll need these prerequisites.
-* LAMP Server
-* Zabbix Server installed on the LAMP
-* Grafana Server installed on the LAMP
+* LAMP Server[LAMP Server](https://www.linux.com/tutorials/easy-lamp-server-installation/)
+* [Zabbix Server installed on the LAMP](https://www.zabbix.com/)
+* [Grafana Server installed on the LAMP](https://grafana.com/)
 ---
 ## Installation Instructions
-1. Create a new item for the host group in your network in Zabbix, name it whatever but be sure the "key" name is identical to what's set in the program which by default is "idletime", set the units to "s" for seconds
+1. [Create a new item](https://www.zabbix.com/documentation/4.2/manual/config/items/item) for the host group in your network, or host if only one host in Zabbix, name it whatever but be sure the "key" name is identical to what's set in the program which by default is "idletime", set the units to "s" for seconds
 ---
 ![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/zabbixDone.png)
 
