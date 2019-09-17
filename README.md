@@ -23,7 +23,7 @@ Pinvoking GetLastInput we're able to extract the value of the last time there wa
 ---
 ## Requirements
 Before installing the program on the host station you'll need these prerequisites.
-* LAMP Server[LAMP Server](https://www.linux.com/tutorials/easy-lamp-server-installation/)
+* [LAMP Server](https://www.linux.com/tutorials/easy-lamp-server-installation/)
 * [Zabbix Server installed on the LAMP](https://www.zabbix.com/)
 * [Grafana Server installed on the LAMP](https://grafana.com/)
 ---
