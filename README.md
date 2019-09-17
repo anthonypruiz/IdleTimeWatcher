@@ -4,8 +4,9 @@
 * Visual user activity monitoring (IdleTime) in real time when workstation is in use. 
 * If there's no user activity, you'll see how long they've been away by a time counter in seconds.
 * Email Alerting when users log in and log out of their workstations.
+* *In the future I'll refine the program to send notifications without the need for Zabbix and Grafana.*
 ---
-![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/grafanaIdleTime3.png")
+![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/grafanaIdleTime3.png)
 > <p align="center">A panel showing the last user interaction by keyboard or mouse.</p>
 ---
 ## Background
@@ -22,12 +23,12 @@ Before installing the program on the host station you'll need these prerequisite
 ## Installation Instructions
 1. Create a new item for the host group in your network in Zabbix, name it whatever but be sure the "key" name is identical to what's set in the program which by default is "idletime", set the units to "s" for seconds
 ---
-![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/zabbixDone.png")
+![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/zabbixDone.png)
 
 2. copy all the contents of the /IdleTime/bin/Debug/ into a folder named "IdleTime" @ C:\IdleTime\
 > The program won't work if run as a service because windows service doesn't operate on the same dimension(IDK what it's called someone correct me), so in order for the program to work we need it to run as a scheduled task. (I will add onto this program in the future an automatic installer for the scheduled task but for now here's the manual steps)
-3. 
 ## **Create "Scheduled Task"**
+3.
 * Name it **"IdleTime"**
 * "When running the task, use the following user account:" **UserName**
 * **Run only when user is logged on.**
@@ -36,7 +37,7 @@ Before installing the program on the host station you'll need these prerequisite
 * Repeat task every **5 minutes** for a duration of **Indefinitely**
 ### Actions
 * Start a program
-* Browse to the i**dletime.exe location**
+* Browse to the **idletime.exe location**
 ### Conditions
 * Check on the Network tab to **run only if connected to the network.**
 ### Settings
@@ -45,3 +46,14 @@ Before installing the program on the host station you'll need these prerequisite
 * if the task is already running, then the follwing rule applies: **Do not start a new instance**
 ---
 > Now the task can run and you'll recieve data on the host computer for idletime.
+## Optional - Grafana Panel Setup & Email Alerting
+### Email Alerting for Attendence notifications
+1. Create a trigger in Zabbix [creating a trigger in Zabbix](https://www.zabbix.com/documentation/4.2/manual/config/triggers/trigger)
+* I set my trigger to {MyHostname:idletime.nodata(5m)}=1 **(no data received for 5 minutes)**
+2. Create an Action where you'll send an email to whomever you want too. 
+* I modified the Alert message to simply say '{HOST.NAME} Has Logged out.'
+* Recovery options send an email with an Alert message '{HOST.NAME} Has Logged In.'
+> Modify this in any way you see fit, you could set triggers if someone is away from their computer for X amount of time etc. So now, after the person logs out the trigger will send an email alert that someone has logged out, and when they log in you'll get an email that they are logged in. If you follow the steps for Grafana there are really neat visuals I'll define how below.
+### Grafana panel setup
+![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/dashboard-2.png)
+![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/dashboard2.png)
