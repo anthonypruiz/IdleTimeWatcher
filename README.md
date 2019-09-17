@@ -31,6 +31,17 @@ Before installing the program on the host station you'll need these prerequisite
 * Name it **"IdleTime"**
 * "When running the task, use the following user account:" **UserName**
 * **Run only when user is logged on.**
- ## Triggers
- * Begin the task **At lon on**
- * Repeat task every **5 minutes**
+### Triggers
+* Begin the task **At logon**
+* Repeat task every **5 minutes** for a duration of **Indefinitely**
+### Actions
+* Start a program
+* Browse to the i**dletime.exe location**
+### Conditions
+* Check on the Network tab to **run only if connected to the network.**
+### Settings
+* If the task fails, restart every **1 minute**
+* **Uncheck the checkbox** "Stop the task if it runs longer than"
+* if the task is already running, then the follwing rule applies: **Do not start a new instance**
+---
+> Now the task can run and you'll recieve data on the host computer for idletime.
