@@ -31,11 +31,16 @@ Before installing the program on the host station you'll need these prerequisite
 1. [Create a new item](https://www.zabbix.com/documentation/4.2/manual/config/items/item) for the host group in your network, or host if only one host in Zabbix, name it whatever but be sure the "key" name is identical to what's set in the program which by default is "idletime", set the units to "s" for seconds
 ---
 ![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/zabbixDone.png)
-
+> <p align="center">What the settings need to be at a minimum for the IdleTime item in Zabbix</p>
 2. copy all the contents of the /IdleTime/bin/Debug/ into a folder named "IdleTime" @ C:\IdleTime\
 > The program won't work if run as a service because windows service doesn't operate on the same dimension(IDK what it's called someone correct me), so in order for the program to work we need it to run as a scheduled task. (I will add onto this program in the future an automatic installer for the scheduled task but for now here's the manual steps)
+### Modify settings
+* Open the IdleTime.exe.config file in a text editor and be sure that you have these settings defined.
+* ZabbixSenderLocation - [zabbix_sender.exe](https://www.zabbix.com/documentation/4.2/manual/concepts/sender) location
+* ZabbixServerLocation - IP Address of the Zabbix Server
+* ZabbixLogLocation - Log location default is "C:\zabbix\IdleTime.log"
 ## **Create "Scheduled Task"**
-3.
+4.
 * Name it **"IdleTime"**
 * "When running the task, use the following user account:" **UserName**
 * **Run only when user is logged on.**
@@ -55,15 +60,16 @@ Before installing the program on the host station you'll need these prerequisite
 > Now the task can run and you'll recieve data on the host computer for idletime.
 ## Optional - Grafana Panel Setup & Email Alerting
 ### Email Alerting for Attendence notifications
-1. Create a trigger in Zabbix [creating a trigger in Zabbix](https://www.zabbix.com/documentation/4.2/manual/config/triggers/trigger)
+1. [Create a trigger in Zabbix](https://www.zabbix.com/documentation/4.2/manual/config/triggers/trigger)
 * I set my trigger to {MyHostname:idletime.nodata(5m)}=1 **(no data received for 5 minutes)**
-2. Create an Action where you'll send an email to whomever you want too. 
-* I modified the Alert message to simply say '{HOST.NAME} Has Logged out.'
-* Recovery options send an email with an Alert message '{HOST.NAME} Has Logged In.'
+2. Create an Action where you'll **send an email to whomever you want too**. 
+* I modified the Alert message to simply say **'{HOST.NAME} Has Logged out.'**
+* Recovery options send an email with an Alert message **'{HOST.NAME} Has Logged In.'**
 > Modify this in any way you see fit, you could set triggers if someone is away from their computer for X amount of time etc. So now, after the person logs out the trigger will send an email alert that someone has logged out, and when they log in you'll get an email that they are logged in. If you follow the steps for Grafana there are really neat visuals I'll define how below.
 ### Grafana panel setup
 ![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/dashboard-2.png)
 ![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/dashboard2.png)
+> <p align="center">panels showing the last user interaction by keyboard or mouse.</p>
 > Here's the steps I took to create the 1st picture's dashboard with singlestat panels showing user's idletime.
 1. Create a new Dashboard
 2. Create a [Singlestat Panel](https://grafana.com/docs/features/panels/singlestat/)
