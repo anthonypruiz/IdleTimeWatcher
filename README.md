@@ -57,3 +57,23 @@ Before installing the program on the host station you'll need these prerequisite
 ### Grafana panel setup
 ![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/dashboard-2.png)
 ![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/dashboard2.png)
+> Here's the steps I took to create the 1st picture's dashboard with singlestat panels showing user's idletime.
+1. Create a new Dashboard
+2. Create a [Singlestat Panel](https://grafana.com/docs/features/panels/singlestat/)
+### Source
+* DataSource = *ZabbixDB*
+* Group = (if applicable *GroupName*)
+* Item = *idletime*
+* Host = *HostName*
+### Value
+* Stat = *Current*
+* Unit = *Time, Seconds* or *hh:mm:ss* option.
+### Coloring
+* Thresholds, (*300, 1800*) (This setting changes the counter color from green to orange after 5 minutes, red after 30 minutes).
+### Sparklines
+* Optional it's self explanatory I think it's cool to use this
+### Value Mapping
+* *null -> Out*
+3. Duplicate the panel for as many hosts that you need to watch.
+4. Set the history to show the time range that's most helpful to you. I set mine to 5 minutes.
+5. Save it and there you have it.
