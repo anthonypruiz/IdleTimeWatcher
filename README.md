@@ -1,5 +1,6 @@
 # IdleTimeWatcher
 > This program gives the ability to monitor the network by Idletime with Zabbix and Graphana. Attendence and host inactivity email alerts.
+---
 ## Quick Navigation
 * [Background](https://github.com/anthonypruiz/IdleTimeWatcher#background)
 * [Requirements](https://github.com/anthonypruiz/IdleTimeWatcher#requirements)
@@ -7,6 +8,7 @@
 * [Scheduled Task](https://github.com/anthonypruiz/IdleTimeWatcher#create-scheduled-task)
 * [Email Alerts](https://github.com/anthonypruiz/IdleTimeWatcher#email-alerting-for-attendence-notifications)
 * [Grafana Dashboard Setup](https://github.com/anthonypruiz/IdleTimeWatcher#grafana-panel-setup)
+---
 ## Features
 * Visual user activity monitoring (IdleTime) in real time when workstation is in use. 
 * If there's no user activity, you'll see how long they've been away by a time counter in seconds.
@@ -39,6 +41,7 @@ Before installing the program on the host station you'll need these prerequisite
 * ZabbixSenderLocation - [zabbix_sender.exe](https://www.zabbix.com/documentation/4.2/manual/concepts/sender) location
 * ZabbixServerLocation - IP Address of the Zabbix Server
 * ZabbixLogLocation - Log location default is "C:\zabbix\IdleTime.log"
+---
 ## **Create "Scheduled Task"**
 4.
 * Name it **"IdleTime"**
@@ -58,6 +61,7 @@ Before installing the program on the host station you'll need these prerequisite
 * if the task is already running, then the follwing rule applies: **Do not start a new instance**
 ---
 > Now the task can run and you'll recieve data on the host computer for idletime.
+---
 ## Optional - Grafana Panel Setup & Email Alerting
 ### Email Alerting for Attendence notifications
 1. [Create a trigger in Zabbix](https://www.zabbix.com/documentation/4.2/manual/config/triggers/trigger)
