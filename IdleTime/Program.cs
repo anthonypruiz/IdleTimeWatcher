@@ -1,4 +1,4 @@
-﻿//THIS FILE NEEDS TO RESIDE IN THE HOST THAT YOU WANT TO WATCH FOR ACTIVITY.
+//THIS FILE NEEDS TO RESIDE IN THE HOST THAT YOU WANT TO WATCH FOR ACTIVITY.
 //UNTIL I AUTOMATE THE INSTALLATION YOU'LL NEED TO ADD A SCHEDULED TASK TO RUN WHEN THE USER LOGS ON.
 //SET PARAMETERS IN THE 
 //
@@ -13,7 +13,7 @@ namespace IdleTime
     class Program
     {
         //LOGGING METHOD FORMAT
-        public static void Log(string logMessage, TextWriter w)
+        private static void Log(string logMessage, TextWriter w)
         {
             w.Write("\r\nLog Entry : ");
             w.WriteLine($"{DateTime.Now.ToLongTimeString()} {DateTime.Now.ToLongDateString()}");
@@ -23,8 +23,8 @@ namespace IdleTime
         }
         //THIS PROCESS HAS TO RUN IN THE USERS ENVIRONMENT AND CAN'T BE RUN AS A SERVICE
         //SO THE DLLS BELOW HAVE BEEN IMPORTED SO YOU CAN HIDE THE COMMAND WINDOW AS QUICKLY AS POSSIBLE.
-        [DllImport("user32.dll")]
-        public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
 
         [DllImport("user32.dll")]
         static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -35,7 +35,7 @@ namespace IdleTime
         static void Main(string[] args)
         {
             //IF YOU WANT TO SEE THE OUTPUT WINDOW SET THE HIDEWINDOW CONFIG TO FALSE
-            if(Settings.Default.HideWindow == false){
+            if(Settings.Default.HideWindow == true){
             IntPtr hWnd = FindWindow(null, Application.ExecutablePath);
             ShowWindow(hWnd, 0); // 0 = SW_HIDE
             FreeConsole();
