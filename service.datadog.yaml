@@ -1,0 +1,39 @@
+schema-version: v2
+dd-service: idletime
+contacts:
+  - contact: anthony.ruiz12@accesscfa.com
+    name: Anthony Ruiz
+    type: email
+  - contact: anthonypruiz@outlook.com
+    name: Anthony's Personal Email
+    type: email
+dd-team: Fancy People Team
+docs:
+  - name: Detailed Information on Fancy Idletime Service
+    provider: Confluence
+    url: >-
+      https://cfacorp.atlassian.net/wiki/spaces/~63f641b3c1f7acaf636c5721/pages/4166778899/Observability+Role+Work+Scope
+extensions:
+  latest-build: '15'
+integrations:
+  opsgenie:
+    service-url: https://anthony.oppsgenie.com/service-directory/idletime
+    region: US
+  pagerduty: https://anthony.pagerduty.com/service-directory/idletime
+links:
+  - name: Zabbix / Grafana Integration Instructions
+    type: url
+    url: https://anthonypaulruiz.com/idle-time-network-monitoring
+  - name: Chick Fil A Wiki
+    type: wiki
+    url: https://en.wikipedia.org/wiki/Chick-fil-A
+repos:
+  - name: Idletime Repo
+    provider: Github
+    url: https://github.com/anthonypruiz/IdleTimeWatcher
+tags:
+  - service_tag:fancy_people_team
+  - service:idletime
+  - tech_domain:CTS
+  - service_id:5
+team: Fancy People Team
