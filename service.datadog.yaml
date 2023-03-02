@@ -5,7 +5,7 @@ contacts:
     name: Anthony Ruiz
     type: email
   - contact: anthonypruiz@outlook.com
-    name: Anthonys Personal Email
+    name: Anthony's Personal Email
     type: email
 dd-team: Fancy People Team
 docs:
@@ -27,6 +27,10 @@ links:
   - name: Chick Fil A Wiki
     type: wiki
     url: https://en.wikipedia.org/wiki/Chick-fil-A
+  - name: Idletime Runbook Example
+    type: runbook
+    url: >-
+      https://cfacorp.atlassian.net/wiki/spaces/~63f641b3c1f7acaf636c5721/pages/4166713447/Runbook+Example+Page
 repos:
   - name: Idletime Repo
     provider: Github
