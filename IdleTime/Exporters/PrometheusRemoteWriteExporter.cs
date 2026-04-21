@@ -19,8 +19,7 @@ internal sealed class PrometheusRemoteWriteExporter : IMetricExporter, IDisposab
     private readonly IOptionsMonitor<PrometheusRemoteWriteOptions> _monitor;
     private readonly ILogger<PrometheusRemoteWriteExporter> _logger;
     // HttpClient is kept as a long-lived singleton for connection pooling.
-    // Per-request auth and timeout are applied on HttpRequestMessage / HttpClient.Timeout,
-    // so they pick up config changes without recreating the client.
+    // Timeout is Infinite here; per-request timeout is enforced via a linked CancellationTokenSource.
     private readonly HttpClient _http = new();
 
     public PrometheusRemoteWriteExporter(
@@ -29,6 +28,9 @@ internal sealed class PrometheusRemoteWriteExporter : IMetricExporter, IDisposab
     {
         _monitor = monitor;
         _logger = logger;
+        // Disable the built-in timeout so we can apply a per-request timeout
+        // via CancellationTokenSource without hitting the "already started" lock.
+        _http.Timeout = Timeout.InfiniteTimeSpan;
     }
 
     public async Task ExportAsync(TimeSpan idleTime, CancellationToken cancellationToken = default)
@@ -36,9 +38,8 @@ internal sealed class PrometheusRemoteWriteExporter : IMetricExporter, IDisposab
         var opts = _monitor.CurrentValue;
         if (!opts.Enabled) return;
 
-        // Apply timeout from current config — safe because this background service
-        // never runs two ExportAsync calls concurrently.
-        _http.Timeout = TimeSpan.FromSeconds(opts.TimeoutSeconds);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(opts.TimeoutSeconds));
 
         var labels = BuildLabels(opts);
         var timestampMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -74,7 +75,7 @@ internal sealed class PrometheusRemoteWriteExporter : IMetricExporter, IDisposab
 
         try
         {
-            var response = await _http.SendAsync(request, cancellationToken);
+            var response = await _http.SendAsync(request, cts.Token);
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
