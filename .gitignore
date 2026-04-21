@@ -1,0 +1,27 @@
+# Build outputs
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Publish output
+publish/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+nuget.config
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db
+.DS_Store
