@@ -1,96 +1,463 @@
 # IdleTimeWatcher
-> This program gives the ability to monitor the network by Idletime with Zabbix and Graphana. Attendence and host inactivity email alerts.
+
+> A Windows user-session idle-time monitor that ships metrics to **Prometheus Remote Write** and/or **Zabbix** using a modern .NET 8 Generic Host architecture.
+
+[![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows)](https://www.microsoft.com/windows)
+[![License](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
+
 ---
-## Quick Navigation
-* [Background](https://github.com/anthonypruiz/IdleTimeWatcher#background)
-* [Requirements](https://github.com/anthonypruiz/IdleTimeWatcher#requirements)
-* [Installation](https://github.com/anthonypruiz/IdleTimeWatcher#installation-instructions)
-* [Scheduled Task](https://github.com/anthonypruiz/IdleTimeWatcher#create-scheduled-task)
-* [Email Alerts](https://github.com/anthonypruiz/IdleTimeWatcher#email-alerting-for-attendence-notifications)
-* [Grafana Dashboard Setup](https://github.com/anthonypruiz/IdleTimeWatcher#grafana-panel-setup)
+
+## Table of Contents
+
+- [Overview](#overview)
+- [How It Works](#how-it-works)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Requirements](#requirements)
+- [Building from Source](#building-from-source)
+- [Configuration](#configuration)
+- [Deployment & Auto-Start](#deployment--auto-start)
+  - [Option A — Registry Run Key (Recommended)](#option-a--registry-run-key-recommended)
+  - [Option B — Windows Scheduled Task](#option-b--windows-scheduled-task)
+- [Prometheus Remote Write Integration](#prometheus-remote-write-integration)
+  - [Compatible Backends](#compatible-backends)
+  - [Grafana Dashboard](#grafana-dashboard)
+- [Zabbix Integration](#zabbix-integration)
+  - [Item Setup](#item-setup)
+  - [Alerting Triggers](#alerting-triggers)
+- [Development Guide](#development-guide)
+  - [Adding a New Exporter](#adding-a-new-exporter)
+  - [Running in Debug Mode](#running-in-debug-mode)
+- [Why Not a Windows Service?](#why-not-a-windows-service)
+- [License](#license)
+
 ---
+
+## Overview
+
+IdleTimeWatcher solves a practical problem: knowing whether a workstation is actively in use.
+It P/Invokes `GetLastInputInfo` from `user32.dll` to measure keyboard and mouse idle time, then pushes that value (in seconds) to one or both of:
+
+| Sink | Protocol |
+| --- | --- |
+| **Prometheus Remote Write** | HTTP POST with snappy-compressed protobuf (remote_write 1.0) |
+| **Zabbix** | CLI invocation of `zabbix_sender.exe` |
+
+The metric can drive Grafana dashboards, Zabbix alerting triggers, or any other system that reads from a Prometheus-compatible TSDB.
+
+**Original use-case:** attendance monitoring in an office environment — management wanted to know when employees arrived at and left their workstations, without invasive software, and receive email alerts on login/logout events.
+
+---
+
+## How It Works
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Windows User Session                                                        │
+│                                                                              │
+│  ┌──────────────────┐   GetLastInputInfo   ┌────────────────────────────┐   │
+│  │  Keyboard/Mouse  │ ──────────────────▶  │  IdleTimeDetector          │   │
+│  │  (user32.dll)    │                      │  (P/Invoke wrapper)        │   │
+│  └──────────────────┘                      └────────────┬───────────────┘   │
+│                                                         │ TimeSpan           │
+│                                            ┌────────────▼───────────────┐   │
+│                                            │  Worker (BackgroundService) │   │
+│                                            │  loop delay: 2–10 s jitter │   │
+│                                            └──────────┬─────────┬───────┘   │
+│                                                       │         │            │
+│                              ┌────────────────────────▼─┐  ┌───▼─────────────────────┐ │
+│                              │  ZabbixExporter           │  │  PrometheusRemoteWrite  │ │
+│                              │  (zabbix_sender CLI)      │  │  Exporter               │ │
+│                              └──────────┬────────────────┘  │  (snappy protobuf HTTP) │ │
+│                                         │                    └─────────────┬───────────┘ │
+└─────────────────────────────────────────┼──────────────────────────────────┼───────────┘
+                                          │                                  │
+                              ┌───────────▼──────────────┐  ┌───────────────▼──────────────┐
+                              │  Zabbix Server            │  │  Prometheus / Mimir /         │
+                              │  → Grafana (optional)     │  │  VictoriaMetrics / Cortex     │
+                              │  → Email alerts           │  │  → Grafana                   │
+                              └──────────────────────────┘  └──────────────────────────────┘
+```
+
+---
+
+## Architecture
+
+The application is built on the **.NET 8 Generic Host** pattern, the same backbone used by ASP.NET Core and Worker Services.
+
+| Concern | Approach |
+| --- | --- |
+| Application lifetime | `IHost` / `BackgroundService` |
+| Configuration | `appsettings.json` + Options pattern (`IOptions<T>`) |
+| Logging | Serilog — structured output to console + rolling daily files |
+| Dependency Injection | `Microsoft.Extensions.DependencyInjection` |
+| Exporter extensibility | `IMetricExporter` interface — add new sinks without touching `Worker` |
+| Prometheus wire format | Hand-rolled protobuf encoder + Snappier compression (no codegen step) |
+| Auto-start | HKCU registry `Run` key managed via `--install` / `--uninstall` CLI |
+
+### Why a custom protobuf encoder?
+
+The Prometheus Remote Write 1.0 specification uses a small, fixed protobuf schema (`WriteRequest → TimeSeries → Label/Sample/MetricMetadata`). Rather than pulling in `Google.Protobuf` and a `.proto` build step, this project ships a self-contained encoder in [`ProtoEncoder.cs`](IdleTime/Exporters/ProtoEncoder.cs) that covers all four message types including `MetricMetadata` (used to declare `idle_time_seconds` as a `GAUGE`). This keeps the dependency footprint minimal while remaining fully spec-compliant and easy to audit.
+
+---
+
+## Tech Stack
+
+| Component | Technology |
+| --- | --- |
+| Runtime | .NET 8.0 (Windows) |
+| Host | `Microsoft.Extensions.Hosting` 8.x |
+| Logging | Serilog 3.x + Console and File sinks |
+| Snappy compression | Snappier 1.x |
+| Windows APIs | P/Invoke (`user32.dll`, `kernel32.dll`, `Microsoft.Win32` registry) |
+| Build | `dotnet build` / MSBuild (SDK-style project) |
+
+---
+
 ## Features
-* Visual user activity monitoring (IdleTime) in real time when workstation is in use. 
-* If there's no user activity, you'll see how long they've been away by a time counter in seconds.
-* Email Alerting when users log in and log out of their workstations.
-* *In the future I'll refine the program to send notifications without the need for Zabbix and Grafana.*
+
+- **Zero-overhead idle detection** — `GetLastInputInfo` is a single kernel call with no polling of input devices
+- **Dual metric sink** — Prometheus Remote Write and Zabbix can be enabled independently or simultaneously
+- **Prometheus Remote Write 1.0** — compatible with Prometheus, Grafana Mimir, Cortex, Thanos Receive, and VictoriaMetrics
+- **Bearer token auth** — configurable for authenticated remote-write endpoints (e.g., Grafana Cloud)
+- **Structured logging** — Serilog outputs JSON-friendly logs to console and rolling daily log files
+- **Self-installing auto-start** — `--install` writes to the HKCU registry Run key; no Scheduled Task wizard required
+- **Graceful shutdown** — `CancellationToken` propagated through the entire call stack; no `Thread.Abort`
+- **Randomized send interval** — jitter between 2–10 s avoids thundering-herd on shared Zabbix/Prometheus infrastructure
+- **Silent background operation** — console window hidden via `GetConsoleWindow` / `ShowWindow` on startup
+
 ---
-![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/grafanaIdleTime3.png)
-> <p align="center">A panel showing the last user interaction by keyboard or mouse.</p>
+
+## Project Structure
+
+```text
+IdleTimeWatcher/
+├── IdleTime/
+│   ├── IdleTime.csproj            SDK-style .NET 8.0-windows project
+│   ├── appsettings.json           Runtime configuration
+│   ├── Program.cs                 Generic Host setup + CLI entry point
+│   ├── Worker.cs                  BackgroundService — the main monitoring loop
+│   ├── Models/
+│   │   └── AppOptions.cs          Strongly-typed configuration option classes
+│   ├── Windows/
+│   │   ├── IdleTimeDetector.cs    P/Invoke wrapper for GetLastInputInfo
+│   │   ├── ConsoleHider.cs        P/Invoke wrapper for GetConsoleWindow/ShowWindow
+│   │   └── StartupManager.cs      HKCU registry auto-start management
+│   └── Exporters/
+│       ├── IMetricExporter.cs     Exporter interface — implement to add new sinks
+│       ├── ZabbixExporter.cs      Zabbix integration via zabbix_sender CLI
+│       ├── ProtoEncoder.cs        Prometheus remote write protobuf + MetricMetadata encoder
+│       └── PrometheusRemoteWriteExporter.cs  HTTP remote write client
+├── agents.md                      AI agent guide (capabilities, invariants, common tasks)
+├── CLAUDE.md                      Claude Code specific guidance
+├── README.md                      This file
+└── LICENSE                        GNU GPLv3
+```
+
 ---
-## Background
-This project originally was a solution to address attendence. Some employees did not clock-in or clock-out and the office management wanted to find a way to know when people signed into their computers and when they left for the day. Not only that they also wanted to get email alerts when these employees logged in and out of their PCs. The users all have Windows 7 transitioning to Windows 10 PCs, I had built a LAMP server already and had Zabbix with Graphana servers monitoring the network already. So after a few other methods that didn't work I ended up with a workable solution.
-<br>
-Pinvoking GetLastInput we're able to extract the value of the last time there was interaction with the computer wheather by keyboard or mouse movement. So after this value is converted to seconds I set an infinite loop with a sleep interval between 2 and 10 seconds to send this value to Zabbix with the Zabbix_Sender. I had Zabbix already connected to Grafana so I created a page template utilizing the singlestat panel for the IdleTime value, added the cool sparkline graphic and show the value of seconds counting up per host. So in an unintended fashion I can now see when people are at their computers and how long they've been away. To finish off the solution I set a trigger and created an action in Zabbix to notify the interested parties in management when "nodata" is logged in Zabbix Idletime over 5 minutes. So after a user logs out the trigger is set and management gets an email saying so and so has logged out. When they log in the next day the problem is resolved and Zabbix sends out an email saying so and so has logged in. Not only does this work here but the Single Stat panel associated with the workstation glows red in grafana page when the trigger is set until they log back in and it's resolved.
----
+
 ## Requirements
-Before installing the program on the host station you'll need these prerequisites.
-* [LAMP Server](https://www.linux.com/tutorials/easy-lamp-server-installation/)
-* [Zabbix Server installed on the LAMP](https://www.zabbix.com/)
-* [Grafana Server installed on the LAMP](https://grafana.com/)
+
+| Requirement | Notes |
+| --- | --- |
+| .NET 8 Runtime | [Download](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) — not needed if publishing self-contained |
+| Windows 10 / 11 | Must run in the user's interactive session |
+| `zabbix_sender.exe` | Only required if `Zabbix:Enabled` is `true` |
+| Prometheus / Mimir / etc. | Only required if `PrometheusRemoteWrite:Enabled` is `true` |
+
 ---
-## Installation Instructions
-1. [Create a new item](https://www.zabbix.com/documentation/4.2/manual/config/items/item) for the host group in your network, or host if only one host in Zabbix, name it whatever but be sure the "key" name is identical to what's set in the program which by default is "idletime", set the units to "s" for seconds
+
+## Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/anthonypruiz/IdleTimeWatcher.git
+cd IdleTimeWatcher/IdleTime
+
+# Restore dependencies and build (Debug)
+dotnet build
+
+# Release build
+dotnet build -c Release
+
+# Publish as a self-contained single-file executable (no runtime required on target)
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+```
+
+The self-contained publish produces a single `IdleTimeWatcher.exe` in `bin/Release/net8.0-windows/win-x64/publish/`. Copy that file and `appsettings.json` to the deployment directory.
+
 ---
-![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/zabbixDone.png)
-> <p align="center">What the settings need to be at a minimum for the IdleTime item in Zabbix</p>
-2. copy all the contents of the /IdleTime/bin/Debug/ into a folder named "IdleTime" @ C:\IdleTime\
-> The program won't work if run as a service because windows service doesn't operate on the same dimension(IDK what it's called someone correct me), so in order for the program to work we need it to run as a scheduled task. (I will add onto this program in the future an automatic installer for the scheduled task but for now here's the manual steps)
-### Modify settings
-* Open the IdleTime.exe.config file in a text editor and be sure that you have these settings defined.
-* ZabbixSenderLocation - [zabbix_sender.exe](https://www.zabbix.com/documentation/4.2/manual/concepts/sender) location
-* ZabbixServerLocation - IP Address of the Zabbix Server
-* ZabbixLogLocation - Log location default is "C:\zabbix\IdleTime.log"
+
+## Configuration
+
+All settings live in `appsettings.json` next to the executable. No registry editing or XML config files required.
+
+```jsonc
+{
+  "Logging": {
+    // Rolling daily log files; the dash is replaced by the date stamp (e.g., idle-20240101.log).
+    "FilePath": "C:\\IdleTimeWatcher\\logs\\idle-.log"
+  },
+  "Watcher": {
+    "MinIntervalSeconds": 2,      // Minimum randomized send interval
+    "MaxIntervalSeconds": 10,     // Maximum randomized send interval
+    "HideConsoleWindow": true     // false = keep console visible (useful during development)
+  },
+  "Zabbix": {
+    "Enabled": true,
+    "SenderPath": "C:\\zabbix\\zabbix_sender.exe",
+    "ServerAddress": "192.168.101.233",
+    "ServerPort": 10051,
+    "ItemKey": "idletime"         // Must match the Zabbix item key exactly (case-sensitive)
+  },
+  "PrometheusRemoteWrite": {
+    "Enabled": false,
+    "Endpoint": "http://prometheus:9090/api/v1/write",
+    "JobLabel": "idle_time_watcher",
+    "AdditionalLabels": {
+      "environment": "production" // Arbitrary key/value labels attached to every sample
+    },
+    "TimeoutSeconds": 10,
+    "BearerToken": ""             // Leave empty if the endpoint has no authentication
+  }
+}
+```
+
+To override the minimum log level, add a `Serilog` section:
+
+```jsonc
+"Serilog": {
+  "MinimumLevel": {
+    "Default": "Information",
+    "Override": { "Microsoft": "Warning" }
+  }
+}
+```
+
 ---
-## **Create "Scheduled Task"**
-4.
-* Name it **"IdleTime"**
-* "When running the task, use the following user account:" **UserName**
-* **Run only when user is logged on.**
-### Triggers
-* Begin the task **At logon**
-* Repeat task every **5 minutes** for a duration of **Indefinitely**
-### Actions
-* Start a program
-* Browse to the **idletime.exe location**
-### Conditions
-* Check on the Network tab to **run only if connected to the network.**
-### Settings
-* If the task fails, restart every **1 minute**
-* **Uncheck the checkbox** "Stop the task if it runs longer than"
-* if the task is already running, then the follwing rule applies: **Do not start a new instance**
+
+## Deployment & Auto-Start
+
+### Option A — Registry Run Key (Recommended)
+
+The simplest and most reliable way to run IdleTimeWatcher in the user's session at login.
+
+```powershell
+# Install — adds HKCU\Software\Microsoft\Windows\CurrentVersion\Run\IdleTimeWatcher
+IdleTimeWatcher.exe --install
+
+# Check registration status
+IdleTimeWatcher.exe --status
+
+# Remove auto-start
+IdleTimeWatcher.exe --uninstall
+```
+
+The registry value points to the executable path. On next login, the OS launches the process automatically as the logged-on user, giving it full access to `GetLastInputInfo`.
+
+**Advantages over Scheduled Task:**
+
+- Single command to install/uninstall — no Task Scheduler wizard
+- Runs immediately at logon with no polling delay
+- Visible and manageable in **Task Manager → Startup apps**
+
+### Option B — Windows Scheduled Task
+
+If group policy or enterprise tooling requires a Scheduled Task, configure it with these settings:
+
+| Setting | Value |
+| --- | --- |
+| **Trigger** | At logon |
+| **Repeat every** | 5 minutes, indefinitely |
+| **Run as** | Logged-on user (NOT SYSTEM) |
+| **Condition** | Run only if network available |
+| **If the task fails, restart every** | 1 minute |
+| **Stop the task if it runs longer than** | Disabled |
+| **If already running** | Do not start a new instance |
+
+> **Critical:** the task must run as the logged-on user, never as `SYSTEM`. `GetLastInputInfo` returns 0 when called outside the interactive session.
+
 ---
-> Now the task can run and you'll recieve data on the host computer for idletime.
+
+## Prometheus Remote Write Integration
+
+Enable in `appsettings.json`:
+
+```json
+"PrometheusRemoteWrite": {
+  "Enabled": true,
+  "Endpoint": "http://your-prometheus-host:9090/api/v1/write"
+}
+```
+
+The exporter pushes one time series per cycle:
+
+```text
+idle_time_seconds{job="idle_time_watcher", instance="HOSTNAME", ...}  <seconds>  <epoch_ms>
+```
+
+Labels are sorted lexicographically as required by the Prometheus remote write specification.
+
+### Compatible Backends
+
+**Prometheus** — enable the remote write receiver:
+
+```yaml
+# prometheus.yml — or pass --web.enable-remote-write-receiver on the CLI
+remote_write_receiver: true
+```
+
+**VictoriaMetrics** — the `/api/v1/write` endpoint is enabled by default:
+
+```json
+"Endpoint": "http://victoria-metrics:8428/api/v1/write"
+```
+
+**Grafana Cloud** — use a bearer token for authentication:
+
+```json
+"PrometheusRemoteWrite": {
+  "Enabled": true,
+  "Endpoint": "https://prometheus-prod-xx.grafana.net/api/prom/push",
+  "BearerToken": "glc_eyJ..."
+}
+```
+
+### Grafana Dashboard
+
+Create a **Time series** panel with this PromQL query:
+
+```promql
+idle_time_seconds{instance="HOSTNAME"}
+```
+
+Suggested visualization settings:
+
+| Setting | Value |
+| --- | --- |
+| Unit | `Time → seconds (s)` |
+| Min | `0` |
+| Threshold (orange) | `300` (5 minutes) |
+| Threshold (red) | `1800` (30 minutes) |
+| Fill opacity | `10` |
+
+For a per-machine status board, use a **Stat** panel grouped by `instance`:
+
+```promql
+idle_time_seconds
+```
+
+**Alert — user logged out** (no data for 5 minutes):
+
+```promql
+absent_over_time(idle_time_seconds{instance="HOSTNAME"}[5m]) == 1
+```
+
 ---
-## Optional - Grafana Panel Setup & Email Alerting
-### Email Alerting for Attendence notifications
-1. [Create a trigger in Zabbix](https://www.zabbix.com/documentation/4.2/manual/config/triggers/trigger)
-* I set my trigger to {MyHostname:idletime.nodata(5m)}=1 **(no data received for 5 minutes)**
-2. Create an Action where you'll **send an email to whomever you want too**. 
-* I modified the Alert message to simply say **'{HOST.NAME} Has Logged out.'**
-* Recovery options send an email with an Alert message **'{HOST.NAME} Has Logged In.'**
-> Modify this in any way you see fit, you could set triggers if someone is away from their computer for X amount of time etc. So now, after the person logs out the trigger will send an email alert that someone has logged out, and when they log in you'll get an email that they are logged in. If you follow the steps for Grafana there are really neat visuals I'll define how below.
-### Grafana panel setup
-![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/dashboard-2.png)
-![](https://anthonypaulruiz.com/wp-content/uploads/2019/09/dashboard2.png)
-> <p align="center">panels showing the last user interaction by keyboard or mouse.</p>
-> Here's the steps I took to create the 1st picture's dashboard with singlestat panels showing user's idletime.
-1. Create a new Dashboard
-2. Create a [Singlestat Panel](https://grafana.com/docs/features/panels/singlestat/)
-### Source
-* DataSource = *ZabbixDB*
-* Group = (if applicable *GroupName*)
-* Item = *idletime*
-* Host = *HostName*
-### Value
-* Stat = *Current*
-* Unit = *Time, Seconds* or *hh:mm:ss* option.
-### Coloring
-* Thresholds, (*300, 1800*) (This setting changes the counter color from green to orange after 5 minutes, red after 30 minutes).
-### Sparklines
-* Optional it's self explanatory I think it's cool to use this
-### Value Mapping
-* *null -> Out*
-3. Duplicate the panel for as many hosts that you need to watch.
-4. Set the history to show the time range that's most helpful to you. I set mine to 5 minutes.
-5. Save it and there you have it.
+
+## Zabbix Integration
+
+### Item Setup
+
+Create a **Zabbix item** on the target host:
+
+| Field | Value |
+| --- | --- |
+| Name | `Idle Time` |
+| Type | `Zabbix trapper` |
+| Key | `idletime` (case-sensitive, must match `Zabbix:ItemKey` in config) |
+| Type of information | `Numeric (float)` |
+| Units | `s` |
+
+The `zabbix_sender` CLI invocation made by the exporter:
+
+```text
+zabbix_sender.exe -z <ServerAddress> -p 10051 -s "<MachineName>" -k idletime -o <seconds>
+```
+
+`MachineName` is `Environment.MachineName` — it must match the **Host name** registered in Zabbix exactly (case-sensitive).
+
+### Alerting Triggers
+
+**User logged out** — no data received for 5 minutes:
+
+```text
+{HOST.NAME:idletime.nodata(5m)}=1
+```
+
+Set up a **Zabbix Action** on this trigger:
+
+- Problem message: `{HOST.NAME} has logged out.`
+- Recovery message: `{HOST.NAME} has logged in.`
+
+**Extended absence** — idle for more than 30 minutes while session is still active:
+
+```text
+{HOST.NAME:idletime.last()}>1800
+```
+
+---
+
+## Development Guide
+
+### Adding a New Exporter
+
+1. Create a class in `Exporters/` that implements `IMetricExporter`:
+
+   ```csharp
+   internal sealed class DatadogExporter : IMetricExporter
+   {
+       public async Task ExportAsync(TimeSpan idleTime, CancellationToken cancellationToken = default)
+       {
+           // push to Datadog StatsD / HTTP API
+       }
+   }
+   ```
+
+2. Add a corresponding options class to `Models/AppOptions.cs`.
+
+3. Register it in `Program.cs`:
+
+   ```csharp
+   services.Configure<DatadogOptions>(ctx.Configuration.GetSection("Datadog"));
+   services.AddSingleton<IMetricExporter, DatadogExporter>();
+   ```
+
+4. Add a `"Datadog"` section to `appsettings.json`.
+
+`Worker` automatically calls `ExportAsync` on every registered `IMetricExporter` — no other changes needed.
+
+### Running in Debug Mode
+
+Set `"HideConsoleWindow": false` in `appsettings.json` to keep the console window visible. Set `"Default": "Debug"` under `Serilog:MinimumLevel` to see per-cycle idle values.
+
+```bash
+cd IdleTime
+dotnet run
+```
+
+---
+
+## Why Not a Windows Service?
+
+`GetLastInputInfo` only returns valid data when called from a process running in the **interactive user session** (Session 1+). Windows Services run in **Session 0**, which is isolated from the desktop and has no keyboard/mouse input — calling `GetLastInputInfo` from a service always returns 0.
+
+Comparison of user-space auto-start approaches:
+
+| Approach | Runs in User Session | Easy to Deploy | Restart on Failure |
+| --- | --- | --- | --- |
+| Registry Run key (`--install`) | Yes | One command | Via Task Manager Startup |
+| Startup folder shortcut | Yes | Copy file | Manual |
+| Scheduled Task (logon trigger) | Yes | Task Scheduler wizard | Built-in restart settings |
+| Windows Service (SYSTEM) | No | `sc create` | Built-in |
+
+The **registry Run key** is the lowest-friction option with no external tooling dependency.
+
+---
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
