@@ -1,6 +1,6 @@
 # IdleTimeWatcher
 
-> A Windows user-session idle-time monitor that ships metrics to **Prometheus Remote Write** and/or **Zabbix** using a modern .NET 8 Generic Host architecture.
+> A Windows user-session idle-time monitor that ships metrics to **Prometheus Remote Write** and/or **Zabbix** using a modern .NET 8 Generic Host architecture with a **system tray icon** for zero-friction administration.
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows)](https://www.microsoft.com/windows)
@@ -19,6 +19,7 @@
 - [Requirements](#requirements)
 - [Building from Source](#building-from-source)
 - [Configuration](#configuration)
+- [System Tray Icon](#system-tray-icon)
 - [Deployment & Auto-Start](#deployment--auto-start)
   - [Option A — Registry Run Key (Recommended)](#option-a--registry-run-key-recommended)
   - [Option B — Windows Scheduled Task](#option-b--windows-scheduled-task)
@@ -86,17 +87,18 @@ The metric can drive Grafana dashboards, Zabbix alerting triggers, or any other 
 
 ## Architecture
 
-The application is built on the **.NET 8 Generic Host** pattern, the same backbone used by ASP.NET Core and Worker Services.
+The application is built on the **.NET 8 Generic Host** pattern, the same backbone used by ASP.NET Core and Worker Services. The process type is `WinExe` — no console window is ever created.
 
 | Concern | Approach |
 | --- | --- |
 | Application lifetime | `IHost` / `BackgroundService` |
+| UI | WinForms `NotifyIcon` (`TrayApplicationContext`) |
 | Configuration | `appsettings.json` + Options pattern (`IOptions<T>`) |
-| Logging | Serilog — structured output to console + rolling daily files |
+| Logging | Serilog — structured output to console (dev) + rolling daily files |
 | Dependency Injection | `Microsoft.Extensions.DependencyInjection` |
 | Exporter extensibility | `IMetricExporter` interface — add new sinks without touching `Worker` |
 | Prometheus wire format | Hand-rolled protobuf encoder + Snappier compression (no codegen step) |
-| Auto-start | HKCU registry `Run` key managed via `--install` / `--uninstall` CLI |
+| Auto-start | HKCU registry `Run` key via CLI or tray menu toggle |
 
 ### Why a custom protobuf encoder?
 
@@ -110,6 +112,7 @@ The Prometheus Remote Write 1.0 specification uses a small, fixed protobuf schem
 | --- | --- |
 | Runtime | .NET 8.0 (Windows) |
 | Host | `Microsoft.Extensions.Hosting` 8.x |
+| UI | Windows Forms (`NotifyIcon`, `ContextMenuStrip`) |
 | Logging | Serilog 3.x + Console and File sinks |
 | Snappy compression | Snappier 1.x |
 | Windows APIs | P/Invoke (`user32.dll`, `kernel32.dll`, `Microsoft.Win32` registry) |
@@ -119,15 +122,15 @@ The Prometheus Remote Write 1.0 specification uses a small, fixed protobuf schem
 
 ## Features
 
+- **System tray icon** — live idle time shown in tooltip; right-click menu for administration; no visible window
 - **Zero-overhead idle detection** — `GetLastInputInfo` is a single kernel call with no polling of input devices
 - **Dual metric sink** — Prometheus Remote Write and Zabbix can be enabled independently or simultaneously
 - **Prometheus Remote Write 1.0** — compatible with Prometheus, Grafana Mimir, Cortex, Thanos Receive, and VictoriaMetrics
 - **Bearer token auth** — configurable for authenticated remote-write endpoints (e.g., Grafana Cloud)
-- **Structured logging** — Serilog outputs JSON-friendly logs to console and rolling daily log files
-- **Self-installing auto-start** — `--install` writes to the HKCU registry Run key; no Scheduled Task wizard required
+- **Structured logging** — Serilog outputs JSON-friendly logs to rolling daily log files
+- **Self-installing auto-start** — toggle "Start with Windows" from the tray menu, or use `--install` from the command line
 - **Graceful shutdown** — `CancellationToken` propagated through the entire call stack; no `Thread.Abort`
 - **Randomized send interval** — jitter between 2–10 s avoids thundering-herd on shared Zabbix/Prometheus infrastructure
-- **Silent background operation** — console window hidden via `GetConsoleWindow` / `ShowWindow` on startup
 
 ---
 
@@ -136,15 +139,16 @@ The Prometheus Remote Write 1.0 specification uses a small, fixed protobuf schem
 ```text
 IdleTimeWatcher/
 ├── IdleTime/
-│   ├── IdleTime.csproj            SDK-style .NET 8.0-windows project
+│   ├── IdleTime.csproj            SDK-style .NET 8.0-windows WinExe project
 │   ├── appsettings.json           Runtime configuration
-│   ├── Program.cs                 Generic Host setup + CLI entry point
+│   ├── Program.cs                 [STAThread] entry point — Generic Host setup + CLI handling
 │   ├── Worker.cs                  BackgroundService — the main monitoring loop
 │   ├── Models/
 │   │   └── AppOptions.cs          Strongly-typed configuration option classes
 │   ├── Windows/
 │   │   ├── IdleTimeDetector.cs    P/Invoke wrapper for GetLastInputInfo
-│   │   ├── ConsoleHider.cs        P/Invoke wrapper for GetConsoleWindow/ShowWindow
+│   │   ├── TrayApplicationContext.cs  WinForms ApplicationContext — NotifyIcon, tray menu
+│   │   ├── ConsoleHider.cs        P/Invoke wrapper for GetConsoleWindow/ShowWindow (legacy)
 │   │   └── StartupManager.cs      HKCU registry auto-start management
 │   └── Exporters/
 │       ├── IMetricExporter.cs     Exporter interface — implement to add new sinks
@@ -203,8 +207,7 @@ All settings live in `appsettings.json` next to the executable. No registry edit
   },
   "Watcher": {
     "MinIntervalSeconds": 2,      // Minimum randomized send interval
-    "MaxIntervalSeconds": 10,     // Maximum randomized send interval
-    "HideConsoleWindow": true     // false = keep console visible (useful during development)
+    "MaxIntervalSeconds": 10      // Maximum randomized send interval
   },
   "Zabbix": {
     "Enabled": true,
@@ -239,11 +242,32 @@ To override the minimum log level, add a `Serilog` section:
 
 ---
 
+## System Tray Icon
+
+Once running, IdleTimeWatcher lives entirely in the notification area (system tray) — no console window, no taskbar entry.
+
+**Tray icon context menu:**
+
+| Item | Description |
+| --- | --- |
+| **IdleTimeWatcher** | App name header (non-clickable) |
+| **Idle: Xs** | Current idle time, updated every 2 seconds |
+| **Start with Windows** | Checkable — toggles the HKCU registry Run key |
+| **Exit** | Gracefully shuts down the watcher and removes the tray icon |
+
+**Tooltip:** Hovering over the tray icon shows `"IdleTimeWatcher — Idle: Xs"`, updated on the same 2-second timer.
+
+---
+
 ## Deployment & Auto-Start
 
 ### Option A — Registry Run Key (Recommended)
 
 The simplest and most reliable way to run IdleTimeWatcher in the user's session at login.
+
+**Via tray menu:** tick **Start with Windows** in the right-click menu — no command line needed.
+
+**Via command line:**
 
 ```powershell
 # Install — adds HKCU\Software\Microsoft\Windows\CurrentVersion\Run\IdleTimeWatcher
@@ -256,11 +280,13 @@ IdleTimeWatcher.exe --status
 IdleTimeWatcher.exe --uninstall
 ```
 
+> Since IdleTimeWatcher is a `WinExe` application (no console window), the `--install`, `--uninstall`, and `--status` commands display their output in a dialog box rather than the terminal.
+
 The registry value points to the executable path. On next login, the OS launches the process automatically as the logged-on user, giving it full access to `GetLastInputInfo`.
 
 **Advantages over Scheduled Task:**
 
-- Single command to install/uninstall — no Task Scheduler wizard
+- Single command (or one click) to install/uninstall
 - Runs immediately at logon with no polling delay
 - Visible and manageable in **Task Manager → Startup apps**
 
@@ -432,7 +458,7 @@ Set up a **Zabbix Action** on this trigger:
 
 ### Running in Debug Mode
 
-Set `"HideConsoleWindow": false` in `appsettings.json` to keep the console window visible. Set `"Default": "Debug"` under `Serilog:MinimumLevel` to see per-cycle idle values.
+Set `"Default": "Debug"` under `Serilog:MinimumLevel` in `appsettings.json` to see per-cycle idle values in the log file. Run directly from the terminal — the tray icon will appear as normal and logs will also write to stdout.
 
 ```bash
 cd IdleTime
@@ -447,14 +473,14 @@ dotnet run
 
 Comparison of user-space auto-start approaches:
 
-| Approach | Runs in User Session | Easy to Deploy | Restart on Failure |
+| Approach | Runs in User Session | Easy to Deploy | Admin UI |
 | --- | --- | --- | --- |
-| Registry Run key (`--install`) | Yes | One command | Via Task Manager Startup |
-| Startup folder shortcut | Yes | Copy file | Manual |
-| Scheduled Task (logon trigger) | Yes | Task Scheduler wizard | Built-in restart settings |
-| Windows Service (SYSTEM) | No | `sc create` | Built-in |
+| **Tray icon + Registry Run key** | Yes | One click or one command | Tray context menu |
+| Startup folder shortcut | Yes | Copy file | None |
+| Scheduled Task (logon trigger) | Yes | Task Scheduler wizard | None |
+| Windows Service (SYSTEM) | No | `sc create` | SCM |
 
-The **registry Run key** is the lowest-friction option with no external tooling dependency.
+The **tray icon with registry Run key** is the recommended option: lowest friction, visible status, and interactive controls without any external tooling.
 
 ---
 
